@@ -36,9 +36,9 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-#define     CE_PIN            22
-#define     CSN_PIN           21
-#define     LED_BUILTIN       2
+#define CE_PIN            22
+#define CSN_PIN           21
+#define LED_BUILTIN       2
 
 //create an RF24 object
 RF24 radio(CE_PIN, CSN_PIN);  // CE, CSN
@@ -160,7 +160,8 @@ void loop() {
     dataNode[4][6 + i] = module5[i];
     }
     
- //row = module yg mana column data volt(0-5), avgtemp(6), maxtemp(7), minTemp(8)
+ //row = module yg mana 
+ //column data volt(0-5), avgtemp(6), maxtemp(7), minTemp(8)
       
   message = "/*" + missionName + "," + runTime + "," + packetCount + "," 
 + dataNode[0][0] + "," + dataNode[0][1] + "," + dataNode[0][2] + "," + dataNode[0][3] + "," + dataNode[0][4] + "," + dataNode[0][5] + "," + dataNode[0][6] + "," + dataNode[0][7] + "," + dataNode[0][8] + "," 
