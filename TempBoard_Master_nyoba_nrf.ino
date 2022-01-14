@@ -10,6 +10,7 @@
 #include <SD.h>                                     //Include SD library for datalogging using microSD module
 #include <nRF24L01.h>
 #include <RF24.h>
+#include <RF24Network.h>
 
 // DEFINE THE SLAVE BOARD
 
@@ -25,47 +26,44 @@
 #define   NOMINAL_RESISTANCE   10000                // The Nominal Resistance Value of NTC
 #define   NOMINAL_TEMPERATURE  25                   // The Nominal Temperature Value of NTC
 #define   BCOEFFICIENT         3950                 // Coefficient of the NTC
+#define   CE_PIN               4
+#define   CSN_PIN              10
 
 #define   SENSORS              8                    // Number of Sensors to Show
 
 const int selectPins[2] = {3, 2};                   // Define the Select Pin MUX
 const int zInput[6]     = {A2, A3, A1, A4, A0, A5}; // Connect analog input
 const int dataInput[4]  = {5, 6, 7, 8};             // Connect data output
-//const int chipSelect    = 10;                       // Define chip select pin for microSD card module
-//const int modePin       = 4;                        // Define mode pin for enable data logging
 const int GIVEN_IN_FROM = 0;
 const int GIVEN_IN_TO   = 2;
-RF24 radio(4, 10);    //CE, CSN
-const byte address[6] = "00001";
+
+RF24 radio(CE_PIN, CSN_PIN);    //CE, CSN
+RF24Network network(radio);
+const uint16_t this_node = 01;                      // Define the address for nrf connection 
+const uint16_t esp_node  = 00;                      // Address for nrf master connection
 
 int       masterOut     = 9;                        // Connect the Master Fault Output pin
 int       state;
 int       slaveState;
 int       fault         = 0;                        // Define the fault state as 0
 float     dataTemp[24]  = {0};                      // Define the Temp data Array
-//File      myFile;                                 // Create File data type variable for data logging
-
 
 float arrAvg[24];
-//boolean faultDetect(float dataTemp[24]);
 float Steinhart(float ADCvalue);
-
+float arrayData[3];
+float avgTemp;
+float total;
 float averageTempC;
 
 void setup()
 {
   Serial.begin(9600);                             // Initialize the serial port
-
+  SPI.begin();
   radio.begin();
-  radio.openWritingPipe(address);
-  radio.setPALevel(RF24_PA_MAX);
-  radio.stopListening();
-
+  network.begin(90, this_node);                   //(channel, address)
+  radio.setDataRate(RF24_2MBPS);
 
   pinMode(masterOut, OUTPUT);                     // Set up masterOut pin as output
-  //  pinMode(chipSelect, OUTPUT);                    // Set up chipSelect as output
-  //  pinMode(modePin, INPUT);                        // Set up mode pin as input
-
   digitalWrite(masterOut, HIGH);
   delay(2000);
 
@@ -95,35 +93,14 @@ void setup()
   } Serial.println();
   delay(500);
 
-
-
-
-  //      for (int i = 0; i < SENSORS; i++)                 // Print the header to microSD
-  //      { radio.write("D");
-  //        radio.write(i + 1);
-  //        radio.write("\t");
-  //      } radio.write();
-  //      delay(50);
-  //
-  //      for (int i = 0; i < SENSORS; i++)
-  //      { myFile.print("--\t");
-  //      } myFile.println();
-  //      delay(500);
-  //      myFile.close();
-  //
-  //    else {
-  //      Serial.println("Can't open new file");
-  //    }
-
 }
 
 void loop()
 {
   int j = 0;
-  float avgTemp, total;
   float maxTemp = dataTemp[0];
   float minTemp = dataTemp[0];
-  float arrayData[3];
+  
 
   for (int i = GIVEN_IN_FROM; i < GIVEN_IN_TO; i++)   // Select the given input pin once a time
   {
@@ -168,24 +145,10 @@ void loop()
 
   }
 
-  //state = faultDetect(dataTemp);                     // Determining the Fault State
-
-  //for(int k = 0; k < 8; k++){
-  //    if (dataTemp[k] > 59){
-  //      fault = 1;
-  //      digitalWrite(masterOut, LOW);
-  //    }
-  //
-  //    else{
-  //      fault = 0;
-  //      digitalWrite(masterOut, HIGH);
-  //    }
-  //}
   for (int i = 0; i < SENSORS; i++)                     // Check if temperature is exceeds 59 celcius
   {
     if (dataTemp[i] > 59)                               // If exceeds 59, define the fault state to 1
       fault = 1;
-
   }
 
   if (fault == 1)                                       // Send the fault state to digital masterOut pin
@@ -193,13 +156,6 @@ void loop()
 
   else
     digitalWrite(masterOut, HIGH);
-
-  // for (int k = 1; k <= SENSORS ; k++){
-  //  sum += dataTemp[k];
-  //  avgTemp = sum / SENSORS;
-  //
-  // }
-
 
 
   Serial.print(String(averageTempC) + "\t");
@@ -214,9 +170,12 @@ void loop()
   for(int i = 0; i < 3; i++){
     Serial.println(arrayData[i]);
   }
-
-  radio.write(&arrayData, sizeof(arrayData));
   delay(50);
+  
+  network.update();
+  RF24NetworkHeader header1(esp_node);
+  bool ok = network.write(header1, &arrayData, sizeof(arrayData));
+  
 
 
   // Serial.println(fault);
@@ -235,47 +194,6 @@ void loop()
   //Serial.print(String(voltage) + " " + "V");
 
   
-  //
-  //  if (digitalRead(modePin) == HIGH) {                     // Print the data to microSD
-  //    myFile = SD.open("DataLog.txt", FILE_WRITE);
-  //    if (myFile) {
-  //
-  //      int j = 0;
-  //
-  //      for (int i = GIVEN_IN_FROM; i < GIVEN_IN_TO; i++)
-  //      {
-  //        for (byte pin = 0; pin < 4; pin++)
-  //        {
-  //          digitalWrite(selectPins[0], bitRead(pin, 0));
-  //          digitalWrite(selectPins[1], bitRead(pin, 1));
-  //          delay(100);
-  //
-  //          float inputValue = analogRead(zInput[i]);
-  //
-  //          if (OUTPUT_CELCIUS == true)
-  //          {
-  //            float TemperatureC = Steinhart(inputValue);
-  //            myFile.print(String(TemperatureC) + "\t");
-  //
-  //            dataTemp[j] = TemperatureC;
-  //          }
-  //
-  //          if (OUTPUT_ANALOG_VALUE == true)
-  //          {
-  //            myFile.print(String(inputValue) + "\t");
-  //          }
-  //          delay(50);
-  //
-  //          j++;
-  //        }
-  //      }
-  //      myFile.println();
-  //      delay(100);
-  //      myFile.close();
-  //    }
-  //  }
-
-
 }
 
 //boolean faultDetect(float dataTemp[]) {
