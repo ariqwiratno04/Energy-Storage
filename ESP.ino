@@ -1,3 +1,26 @@
+/*******************************************************************************
+  ******************************************************************************
+  * File Name          : ESP32_MASTER_ACCUMULATOR_INTERFACE
+  * Description        : Main program
+  ******************************************************************************
+  *
+  * COPYRIGHT(c) 2022 Energy Storage Arjuna EV UGM
+  *
+  * Redistribution and use in source and binary forms, with or without modification,
+  * are permitted provided that the following conditions are met:
+  * 
+  *   1. Redistributions of source code must retain the above copyright notice,
+  *      this list of conditions and the following disclaimer.
+  *   2. Redistributions in binary form must reproduce the above copyright notice,
+  *      this list of conditions and the following disclaimer in the documentation
+  *      and/or other materials provided with the distribution.
+  *   3. Neither the name of Arjuna EV UGM nor the names of its contributors
+  *      may be used to endorse or promote products derived from this software
+  *      without specific prior written permission.
+  * 
+  ******************************************************************************
+  */
+/* Includes ------------------------------------------------------------------*/
 
 #include "BluetoothSerial.h"
 
@@ -7,14 +30,27 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
+#include <RF24Network.h>
+#include <ESP32CAN.h>
+#include <CAN_config.h>
+
+/* USER CODE BEGIN PV */
+/* Private variables ---------------------------------------------------------*/
+#define     CE_PIN            22
+#define     CSN_PIN           21
+#define     LED_BUILTIN       2
 
 //create an RF24 object
-RF24 radio(22, 21);  // CE, CSN
+RF24 radio(CE_PIN, CSN_PIN);  // CE, CSN
 
 //address through which two modules communicate.
-const byte address[][6] = {"00001", "00002"};
-float arrayData[3];
-float arrayData1[3];
+const uint16_t this_node = 00;
+float arrayData[15];
+float module1[3];
+float module2[3];
+float module3[3];
+float module4[3];
+float module5[3];
 unsigned long myTime;
 
 BluetoothSerial SerialBT;
@@ -29,13 +65,11 @@ float dataNode[4][8]; //row = module yg mana column data volt(0-5), avgtemp(6), 
 String message;
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
+  SPI.begin();
   radio.begin();
-  radio.openReadingPipe(0, address[0]);
-  radio.openReadingPipe(1, address[1]);
-  radio.setPALevel(RF24_PA_MAX);
+  network.begin(90, this_node);  //(channel, node address)
   radio.setDataRate(RF24_2MBPS);
-  radio.startListening();
   SerialBT.begin("ESP32_Arjuna_pitMonitorTest"); //Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
 
@@ -52,25 +86,82 @@ void loop() {
     myTime = millis();
     receivedChar =(char)SerialBT.read();
     
-    radio.read(&arrayData, sizeof(arrayData));
-    Serial.println("R1");
-    for (byte i = 0; i < 3; i++)
-    Serial.println(arrayData[i]);
+    network.update();
   
-    delay(1000);
+    while ( network.available() ) { // Is there any incoming data?
+    RF24NetworkHeader header;
+    network.read(header, &arrayData, sizeof(arrayData)); // Read the incoming data
+      
+     if (header.from_node == 1) { // If data comes from Node 01
+      for(int i = 0; i < 3; i++)
+      module1[i] = arrayData[i];
+    }
 
-    radio.read(&arrayData1, sizeof(arrayData1));
-    Serial.println("R2");
-    for (byte i = 0; i < 3; i++)
-    Serial.println(arrayData[i]);
+    if (header.from_node == 2) { // If data comes from Node 02
+      for(int i = 0; i < 3; i++)
+      module2[i] = arrayData[i];
+    }
+      
+     if (header.from_node == 3) { // If data comes from Node 03
+      for(int i = 0; i < 3; i++)
+      module3[i] = arrayData[i];
+    }
+      
+     if (header.from_node == 4) { // If data comes from Node 04
+      for(int i = 0; i < 3; i++)
+      module4[i] = arrayData[i];
+    }
+      
+    if (header.from_node == 5) { // If data comes from Node 05
+      for(int i = 0; i < 3; i++)
+      module5[i] = arrayData[i];
+    }
 
-    delay(1000);
-
+    Serial.println("modul1");
+    for (byte i = 0; i < 3; i++){
+    Serial.println(module1[i]);
+    delay(500);
+    }
+    Serial.println("--------");
     
-    dataNode[0][6] = arrayData[0];
-    dataNode[0][7] = arrayData[1];
-    dataNode[0][8] = arrayData[2];
+    Serial.println("modul2");
+    for (byte i = 0; i < 3; i++){
+    Serial.println(module2[i]);
+    delay(500);
+    }
+    Serial.println("--------");
+      
+    Serial.println("modul3");
+    for (byte i = 0; i < 3; i++){
+    Serial.println(module3[i]);
+    delay(500);
+    }
+    Serial.println("--------");
+      
+    Serial.println("modul4");
+    for (byte i = 0; i < 3; i++){
+    Serial.println(module4[i]);
+    delay(500);
+    }
+    Serial.println("--------");
+      
+    Serial.println("modul5");
+    for (byte i = 0; i < 3; i++){
+    Serial.println(module5[i]);
+    delay(500);
+    }
+    Serial.println("--------");
+  
+    for(int i = 0; i < 3; i++){
+    dataNode[0][6 + i] = module1[i];
+    dataNode[1][6 + i] = module2[i];
+    dataNode[2][6 + i] = module3[i];
+    dataNode[3][6 + i] = module4[i];
+    dataNode[4][6 + i] = module5[i];
+    }
     
+ //row = module yg mana column data volt(0-5), avgtemp(6), maxtemp(7), minTemp(8)
+      
   message = "/*" + missionName + "," + runTime + "," + packetCount + "," 
 + dataNode[0][0] + "," + dataNode[0][1] + "," + dataNode[0][2] + "," + dataNode[0][3] + "," + dataNode[0][4] + "," + dataNode[0][5] + "," + dataNode[0][6] + "," + dataNode[0][7] + "," + dataNode[0][8] + "," 
 + dataNode[1][0] + "," + dataNode[1][1] + "," + dataNode[1][2] + "," + dataNode[1][3] + "," + dataNode[1][4] + "," + dataNode[1][5] + "," + dataNode[1][6] + "," + dataNode[1][7] + "," + dataNode[1][8] + "," 
